@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Five In A Row</title>
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+    <link rel="stylesheet" href="font-awesome-4.7.0/css/font-awesome.min.css">
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            font-size: 24px;
+        }
+        
+        table {
+            margin-left: 80px;
+        }
+        
+        
+        
+        
+        #playerTurnInfo{
+            width:500px;
+            height: 50px;
+            position: relative;
+        }
+        #columnNumber{
+            float:left;
+            width: 10%;
+        }
+        #makeMoveBtn{
+            width: 25%;
+            float:left;
+            margin-left: 10px;
+        }
+        #playerTurn{
+            float:left;
+            width: 25%;
+        }
+        
+        
+        #playerDetails{
+            height:230px;
+            width:800px;
+            position: relative;
+        }
+        
+        #player1DetailsDiv{
+            float:left;
+            width:25%;
+        }
+        
+        #gameGrid{
+            float:left;
+            width:50%;
+        }
+        
+        #player2DetailsDiv{
+            float:right;
+            width:25%;
+             
+        }
+        #player2DetailsDivP{
+            clear: left; 
+            float: left; 
+            position: relative; 
+            left: 50%;
+
+        }
+        #player2Details{
+            clear: left; 
+            float: left; 
+            position: relative;
+            left: 50%;
+        }
+  
+    </style>
+    <script>
+
+
+    $(document).ready(function(){
+
+        var setUpGameStateBothPlayers = function(players){
+            $("#player1Details").show();
+            $("#player2Details").show();
+            $("#player1Name").text("Name: " + players[0].name)
+            $("#player1Colour").text("Colour: " + players[0].discColour)
+            $("#player2Name").text("Name: " + players[1].name)
+            $("#player2Colour").text("Colour: " + players[1].discColour)
+        }
+        
+        var setUpGameStatePlayer1 = function(players){
+            $("#player1Details").show();
+            $("#player1Name").text("Name:" + players[0].name)
+            $("#player1Colour").text("Colour:" + players[0].discColour)
+            $("#player2Div").show();
+            var remainingColour = (players[0].discColour === "Yellow") ? "Red" : "Yellow";
+            $("#remainingColour").text(remainingColour);
+        }
+        
+        var populateTurnDetails = function(){
+            $("#playerTurnInfo").show();
+            
+            $.ajax({
+                url: "http://localhost:8080/turn"
+            }).then(function(player) {
+                playerTurn = player;
+                $("#playerTurn").text("Turn: " + player.name);
+            });
+        }
+        
+        var playerTurn = {};
+
+        var populateGameGrid = function(){
+            $("#gameGrid").show();
+            $.ajax({
+                url: "http://localhost:8080/state"
+            }).then(function(gameState) {
+                var tableRows;
+                
+                var i;
+                for(i=gameState.gameGrid.length-1;i>-1;i--){
+                    var row = "<tr>";
+                    var rowColour;                    
+                    for(j=0;j<gameState.gameGrid[i].length;j++){
+                        if(gameState.gameGrid[i][j] === "Yellow"){
+                            rowColour = "yellow";
+                        }else if (gameState.gameGrid[i][j] === "Red"){
+                            rowColour = "red";
+                        }else{
+                            rowColour = "white";
+                        }
+                        row = row + "<td>" + "<i class='fa fa-circle' style='color:" + rowColour + "'></i>" + "</td>";
+                    }
+                    row = row + "</tr>"
+                    tableRows = tableRows + row;
+                }
+                $('#gameBoard tbody').html(tableRows);
+                
+                if(gameState.gameOver === true){
+                    $("#gameOverInfo").show();
+                    $("#playerTurnInfo").hide();
+
+                    if(gameState.winningPlayer){
+                        $("#winnerMsg").text("The winner is " + gameState.winningPlayer.name);
+                    }else{
+                        $("#winnerMsg").text("The game ended in a draw");
+                    }
+                }
+                
+                var isGameOver = gameState.gameOver;
+                
+                $.ajax({
+                    url: "http://localhost:8080/players"
+                }).then(function(data) {
+                    if(data.length === 0){
+                        $("#player1Div").show();
+                    }
+                    else if(data.length === 1){
+                    
+                        setUpGameStatePlayer1(data);
+                    }
+                    else if(data.length === 2){
+                        setUpGameStateBothPlayers(data);
+                        
+                        if(!isGameOver){
+                            populateTurnDetails();
+                        }
+                    };
+                });
+            });
+        }
+        
+
+        $("#player1Btn").click(function(){
+            $.ajax({
+              type: "POST",
+              url: "http://localhost:8080/player",
+              data: JSON.stringify({
+                name: $("#player1").val(),
+                discColour: $("#colourSelect").val()
+              }),
+              contentType: "application/json",
+              success: function(){
+              
+                $.ajax({
+                    url: "http://localhost:8080/players"
+                }).then(function(players) {
+                    $("#player1Div").hide();
+                    $("#player2Div").show();
+                    
+                    setUpGameStatePlayer1(players);
+                });
+              }
+            });
+
+        });
+        
+        $("#player2Btn").click(function(){
+            $.ajax({
+              type: "POST",
+              url: "http://localhost:8080/player",
+              data: JSON.stringify({
+                name: $("#player2").val(),
+                discColour: $("#remainingColour").text()
+              }),
+              contentType: "application/json",
+              success: function(){
+              
+                $.ajax({
+                    url: "http://localhost:8080/players"
+                }).then(function(players) {
+                    $("#player2Div").hide();
+                    setUpGameStateBothPlayers(players);
+                    populateGameGrid();
+                });                
+              }
+            });
+        });
+
+        $("#makeMoveBtn").click(function(){  
+            $.ajax({
+              type: "POST",
+              url: "http://localhost:8080/move",
+              data: JSON.stringify({
+                //take one away as user doesn't count from zero
+                column: $("#columnNumber").val() - 1,
+                discColour: playerTurn.discColour
+              }),
+              contentType: "application/json",
+              success: function(){
+                $("#moveError").hide();
+                populateGameGrid();           
+              },
+              error: function(error){
+                $("#moveError").show();
+                $("#moveError").text("Error: " +error.responseText);
+              }
+            });
+        
+        });
+        
+        
+        $("#restartGameBtn").click(function(){
+            $.ajax({    
+                type: "POST",
+                url: "http://localhost:8080/restartgame",
+                contentType: "application/json",
+                success: function(){
+                    $("#gameOverInfo").hide();
+                    populateGameGrid();           
+                }
+            });
+        });
+        
+        
+        populateGameGrid();
+     });
+    </script>
+</head>
+<body>
+    <h1>***** Five In A Row *****</h1>
+
+    <h3>Rules: Yellow goes first. First player who forms a  horizontal, vertical, or diagonal line of five of their own discs wins</h3>
+    </br>
+
+    <div id="playerTurnInfo" style="display: none">
+        <label for="columnNumber" id="playerTurn"></label>
+        <input type="text" id="columnNumber">
+        <button id="makeMoveBtn">Make Move</button>
+    </div>
+    <p id="moveError" style="display: none; color:red"></p>
+    
+    <div id="gameOverInfo" style="display: none">
+        <p id="winnerMsg"><p>
+        <button id="restartGameBtn">Restart Game</button>
+    </div>
+
+    <h2>Current Game</h2>
+    <div id="playerDetails">
+        <div id="player1DetailsDiv">
+            <p>Player 1:</p>
+            <div id="player1Details"  style="display: none">
+                <img src="player1.png" alt="Player 1"/>
+                <p id="player1Name"></p>
+                <p id="player1Colour"></p>
+            </div>
+        </div>
+        <div id="gameGrid">
+            <table id="gameBoard">
+                <thead>
+                    <th>1</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                    <th>6</th>
+                    <th>7</th>
+                    <th>8</th>
+                    <th>9</th>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+        <div id="player2DetailsDiv">
+            <p id="player2DetailsDivP">Player 2:</p>
+            <div id="player2Details"  style="display: none">
+                <img src="player2.png" alt="Player 2"/>
+                <p id="player2Name"></p>
+                <p id="player2Colour"></p>
+            </div>
+        </div>
+    </div>
+    
+    <div id="player1Div" style="display: none">
+        <h2>Add Players 1 Name and choose colour disc</h2>
+        <input type="text" id="player1" value="enter name">
+        <label for="colourSelect">Choose a colour:</label>
+        <select name="colourDisc" id="colourSelect">
+            <option value="Yellow">Yellow</option>
+            <option value="Red">Red</option>
+        </select>
+        <button id="player1Btn">Create Player</button>
+    </div>
+    <div id="player2Div" style="display: none">
+        <h2>Add Players 2 Name</h2>
+        <input type="text" id="player2" value="enter name">
+        <button id="player2Btn">Create Player</button></br>
+        <p style="display: inline-block; vertical-align: top;">Players2 colour is: </p>
+        <p style="display: inline-block; vertical-align: top;" id="remainingColour"></p>
+    </div>
+</body>
+</html>
